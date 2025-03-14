@@ -5,6 +5,17 @@ import { createHash } from "crypto";
 import { getUserByEmail, getUserById } from "./models/user";
 import { redirect } from "next/navigation";
 
+// Helper function to properly serialize Mongoose documents
+function serializeMongoose(doc: any) {
+  if (!doc) return null;
+  // Handle arrays
+  if (Array.isArray(doc)) {
+    return JSON.parse(JSON.stringify(doc));
+  }
+  // Handle single documents
+  return JSON.parse(JSON.stringify(doc.toObject ? doc.toObject() : doc));
+}
+
 // Hash password function
 export async function hashPassword(password: string): Promise<string> {
   return createHash("sha256").update(password).digest("hex");
@@ -15,7 +26,7 @@ export async function generateSessionToken(): Promise<string> {
   return createHash("sha256").update(Math.random().toString()).digest("hex");
 }
 
-// Set session cookie (Fixed `cookies()` usage)
+// Set session cookie
 export async function setSessionCookie(userId: string) {
   const token = await generateSessionToken();
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days expiry
@@ -38,7 +49,7 @@ export async function clearSessionCookie() {
   await cookieStore.delete("session");
 }
 
-// Get current user from session (Fixed `cookies().get()` issue)
+// Get current user from session
 export async function getCurrentUser() {
   const cookieStore = await cookies(); // Ensure cookies() is awaited
   const sessionCookie = cookieStore.get("session");
@@ -51,7 +62,8 @@ export async function getCurrentUser() {
 
   try {
     const user = await getUserById(userId);
-    return user ? user.toObject() : null; // Convert Mongoose document to plain object
+    // Properly serialize the Mongoose document
+    return serializeMongoose(user);
   } catch (error) {
     console.error("Error getting current user:", error);
     return null;
@@ -77,7 +89,8 @@ export async function login(email: string, password: string) {
   if (!user || user.password !== (await hashPassword(password))) return null;
 
   await setSessionCookie(user._id.toString());
-  return user.toObject(); // Ensure Mongoose document is converted to plain object
+  // Properly serialize the Mongoose document
+  return serializeMongoose(user);
 }
 
 // Logout function
